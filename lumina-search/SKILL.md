@@ -1,400 +1,182 @@
 ---
 name: lumina-search
-description: Lumina Search Service APIs for web search, page retrieval, and in-page text finding. Provides three tools — Search (web search via Bing), Open (fetch full page content by URL or search result reference), and Find (search text patterns within opened pages). Use when users ask to search the web, look up information online, open/read web pages, or find specific content within web pages. Also use when building workflows that need grounded web search results.
+description: Lumina Search Service MCP tools for web search, page retrieval, and in-page text finding. Provides three MCP tools — lumina_search (web search via Bing), lumina_open (fetch full page content by URL or search result reference), and lumina_find (search text patterns within opened pages). Use when users ask to search the web, look up information online, open/read web pages, or find specific content within web pages. Also use when building workflows that need grounded web search results.
 ---
 
 # Lumina Search Service
 
-Three HTTP POST APIs for web search, page content retrieval, and in-page text search. All share a `ToolState` session object that flows between calls.
+Three MCP tools for web search, page content retrieval, and in-page text search. All share a `toolState` session object that flows between calls. Authentication and endpoint configuration are handled by the MCP server.
 
 ---
 
-## Server Configuration
+## MCP Server Setup
 
-The Lumina endpoint varies by environment. Configure it via **environment variables** or a **config file** — environment variables take precedence.
-
-### Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `LUMINA_ENDPOINT` | Base URL for the Lumina API | `https://api.copilotlumina.com` |
-| `LUMINA_BEARER_TOKEN` | Bearer token for authentication | `eyJhbGciOi...` |
-
-### Config File
-
-Create a `lumina-config.json` in the project root or `~/.lumina/config.json`:
+Add the Lumina Search MCP server to your Claude Code configuration:
 
 ```json
 {
-  "endpoint": "https://api.copilotlumina.com",
-  "bearerToken": "eyJhbGciOi..."
+  "mcpServers": {
+    "lumina-search": {
+      "command": "node",
+      "args": ["<path-to>/lumina-search-mcp-server/build/index.js"],
+      "env": {
+        "LUMINA_ENDPOINT": "https://api.copilotlumina.com",
+        "LUMINA_BEARER_TOKEN": "<your-token>"
+      }
+    }
+  }
 }
 ```
 
-### Resolution Order
-
-1. Environment variable `LUMINA_ENDPOINT` / `LUMINA_BEARER_TOKEN` (highest priority)
-2. Project-local `lumina-config.json`
-3. User-level `~/.lumina/config.json`
-
-### Known Environments
+The server resolves configuration from: env vars > project-local `lumina-config.json` > user-level `~/.lumina/config.json`.
 
 | Environment | Endpoint |
 |-------------|----------|
 | Production | `https://api.copilotlumina.com` |
 | SDF | `https://api.sdf.copilotlumina.com` |
-| Custom | Set via `LuminaExperimentServiceEndpoint` config override |
 
 ---
 
-## Authentication
+## MCP Tools
 
-All Lumina API calls require a **Bearer token** in the `Authorization` header.
+### `lumina_search` — Web Search
 
-```
-Authorization: Bearer <token>
-Content-Type: application/json
-```
+Search the web using Bing. Returns result snippets with `pageContext` references for opening full pages.
 
-The token is resolved from configuration (see [Server Configuration](#server-configuration) above). Every HTTP request to any of the three APIs must include this header. Requests without a valid token will receive a `401 Unauthorized` response.
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `q` | string | yes | Search query text |
+| `topN` | integer | no | Max results to return |
+| `recency` | integer | no | Days for recency filter (0 = no filter) |
+| `source` | string | no | Data source (default: `"web_with_bing"`) |
+| `domains` | string[] | no | Restrict to specific domains |
+| `language` | string | no | ISO language code (e.g., `"en"`) |
+| `countryCode` | string | no | ISO country code (e.g., `"us"`) |
+| `market` | string | no | Market locale (e.g., `"en-US"`) |
+| `tool_state` | object | no | ToolState from a prior call |
 
----
+**Returns**: `{ results, toolState }` — each result has `url`, `title`, `content`, `pageContext`, `remainingLines`.
 
-## API Overview
+### `lumina_open` — Open Page
 
-| API | Path | Purpose | Requires ToolState? |
-|-----|------|---------|---------------------|
-| **Search** | `api/sonicberry/search` | Web search via Bing | No (first call) |
-| **Open** | `api/sonicberry/open` | Open a page by reference or URL | Yes (from Search or prior Open) |
-| **Find** | `api/sonicberry/find` | Find text in an opened page | Yes (page must be opened first) |
+Open a web page to retrieve its full content. Provide either `page_context` or `url`.
 
-All APIs are batch-capable (accept arrays of request items).
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page_context` | object | one of | PageContextInfo from a prior search/open result |
+| `url` | string | one of | Direct URL to open |
+| `line_no` | integer | no | Start line number (default: 0) |
+| `num_lines` | integer | no | Lines to return (for pagination) |
+| `tool_state` | object | yes | ToolState from a prior call |
+
+**Returns**: `{ pages, toolState }` — each page has `url`, `title`, `content`, `pageContext`, `totalLines`, `doc`.
+
+### `lumina_find` — Find in Page
+
+Find text within an already-opened page. Supports pattern matching and semantic search.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page_context` | object | yes | PageContextInfo from a prior search/open result |
+| `pattern` | string | yes | Text pattern to find |
+| `query_type` | string | no | `"pattern"` (default) or `"semantic"` |
+| `tool_state` | object | yes | ToolState from a prior call |
+
+**Returns**: `{ results, toolState }` — each result has `pageId`, `content`.
 
 ---
 
 ## ToolState — Session Continuity
 
-`ToolState` is the session object propagated across all API calls. Every response returns an updated `ToolState` — always pass the **latest** one to the next call.
+Every tool response includes an updated `toolState`. Always pass the **latest** `toolState` to the next tool call via the `tool_state` parameter.
 
-```json
-{
-  "sessionId": "unique-session-id",
-  "pages": {
-    "pageId1": { "urls": [...], "imageUrls": [...] }
-  }
-}
 ```
+lumina_search response → toolState S1
+lumina_open(tool_state: S1) response → toolState S2
+lumina_find(tool_state: S2) response → toolState S3
+```
+
+The MCP server manages `toolState` threading, authentication, and LuminaContext generation automatically.
 
 ---
 
 ## Dataflow & Orchestration Patterns
 
-The LLM decides which API to call based on the user's intent. The three valid starting points and flow patterns:
+The LLM decides which tool to call based on the user's intent.
 
 ### Pattern 1: Search-first (most common)
 
 ```
-Search → (review results) → Open (get full page) → Find (locate specific text)
+lumina_search → (review results) → lumina_open → lumina_find
 ```
 
-1. Call **Search** with a query. Returns result snippets + `pageContext` for each result.
-2. Decide which result(s) need more detail — call **Open** with the result's `pageContext`.
-3. Optionally call **Find** to locate specific text within the opened page.
+1. Call `lumina_search` with a query. Returns result snippets + `pageContext`.
+2. Pick the best result(s) — call `lumina_open` with the result's `pageContext` and `tool_state`.
+3. Optionally call `lumina_find` to locate specific text within the opened page.
 
 ### Pattern 2: Open-first (direct URL)
 
 ```
-Open (by URL) → Find (locate specific text)
-Open (by URL) → Search (related queries)
+lumina_open (by url) → lumina_find
+lumina_open (by url) → lumina_search
 ```
 
-1. Call **Open** with a `refId` (direct URL) when you already know the page.
-2. Use **Find** to search within the page, or **Search** for related queries.
+1. Call `lumina_open` with a `url` when you already know the page.
+2. Use `lumina_find` to search within the page, or `lumina_search` for related queries.
 
 ### Pattern 3: Search → Find (skip Open)
 
 ```
-Search → Find (search within a result's content)
+lumina_search → lumina_find
 ```
 
-1. Call **Search** to get results with `pageContext`.
-2. Call **Find** directly using a result's `pageContext` — works if the page content is already in the ToolState.
+1. Call `lumina_search` to get results with `pageContext`.
+2. Call `lumina_find` directly using a result's `pageContext` — works if the page content is already in the `toolState`.
 
-### Constraint: Find cannot start a flow
+### Constraint: lumina_find cannot start a flow
 
-**Find** always requires a `pageContext` from a prior Search or Open call. It cannot be the first API called.
+`lumina_find` always requires a `pageContext` from a prior `lumina_search` or `lumina_open` call. It cannot be the first tool called.
 
-### Decision Logic for the LLM
+### Decision Logic
 
 ```
 User wants to search the web?
-  → Call Search
+  → Call lumina_search
 
 User has a specific URL to read?
-  → Call Open with refId
+  → Call lumina_open with url
 
 Need full content of a search result?
-  → Call Open with pageContext from Search result
+  → Call lumina_open with page_context from search result
 
 Need to find specific text in a page?
-  → Call Find with pageContext (page must exist in ToolState)
+  → Call lumina_find with page_context (page must exist in toolState)
 
 Search results insufficient?
-  → Refine query and call Search again
-  → Or Open promising results for full content
+  → Refine query and call lumina_search again
+  → Or lumina_open promising results for full content
 
 Page too long, need specific section?
-  → Call Find with pattern or semantic query
-  → Or call Open with lineNo/numLines for pagination
+  → Call lumina_find with pattern or semantic query
+  → Or call lumina_open with line_no/num_lines for pagination
 ```
-
----
-
-## API 1: Search
-
-**POST** `api/sonicberry/search`
-
-Performs web search via Bing. Returns result snippets with metadata.
-
-### Request
-
-```json
-{
-  "requests": [
-    {
-      "q": "search query text",
-      "topN": 5,
-      "recency": 7,
-      "source": "web_with_bing",
-      "domains": ["microsoft.com"],
-      "language": "en",
-      "countryCode": "us",
-      "market": "en-US"
-    }
-  ],
-  "toolState": null,
-  "context": {
-    "conversationId": "conv-id",
-    "requestId": "req-id",
-    "traceId": "trace-id",
-    "partner": "partner-id"
-  }
-}
-```
-
-**Key request fields** (only `q` is required):
-
-| Field | Description |
-|-------|-------------|
-| `q` | Search query text (required) |
-| `topN` | Max results to return |
-| `recency` | Days for recency filter (0 = no filter) |
-| `domains` | Restrict to specific domains |
-| `language` | ISO language code (e.g., `en`) |
-| `market` | Market locale (e.g., `en-US`) |
-
-### Response
-
-```json
-{
-  "results": [
-    {
-      "url": "https://example.com/page",
-      "title": "Page Title",
-      "content": "Semantic document content (grounding text)...",
-      "pageContext": { "pageId": "p1", "id": 0, "turn": 1, "action": "Search" },
-      "answerType": "WebPages",
-      "datePublished": "2024-01-15",
-      "remainingLines": 150
-    }
-  ],
-  "toolState": { "sessionId": "...", "pages": {...} },
-  "errors": []
-}
-```
-
-Each result includes:
-- **`content`** — grounding text snippet (may be truncated)
-- **`pageContext`** — pass this to Open or Find for more content
-- **`remainingLines`** — indicates more content is available via Open
-
----
-
-## API 2: Open
-
-**POST** `api/sonicberry/open`
-
-Opens a page to retrieve full content. Use either `pageContext` (from Search) or `refId` (direct URL).
-
-### Request
-
-```json
-{
-  "requests": [
-    {
-      "pageContext": { "pageId": "p1", "id": 0, "turn": 1, "action": "Search" },
-      "lineNo": 0,
-      "numLines": 200
-    }
-  ],
-  "toolState": { "sessionId": "...", "pages": {...} }
-}
-```
-
-**Or with a direct URL:**
-
-```json
-{
-  "requests": [
-    {
-      "refId": "https://example.com/specific-page",
-      "lineNo": 0,
-      "numLines": 200
-    }
-  ],
-  "toolState": { "sessionId": "...", "pages": {...} }
-}
-```
-
-**Key request fields** (one of `pageContext` or `refId` is required):
-
-| Field | Description |
-|-------|-------------|
-| `pageContext` | From a previous Search/Open result |
-| `refId` | Direct URL to open |
-| `lineNo` | Start line (default: 0) |
-| `numLines` | Lines to return (for pagination) |
-
-### Response
-
-```json
-{
-  "pages": [
-    {
-      "url": "https://example.com/page",
-      "title": "Page Title",
-      "content": "Full page content text...",
-      "pageContext": { "pageId": "p1", "id": 0, "turn": 1, "action": "View" },
-      "success": true,
-      "totalLines": 500,
-      "pageId": "p1",
-      "doc": {
-        "links": [...],
-        "imageLinks": [...]
-      }
-    }
-  ],
-  "toolState": { "sessionId": "...", "pages": {...} }
-}
-```
-
-Use `lineNo` and `numLines` for incremental page loading when content is large.
-
----
-
-## API 3: Find
-
-**POST** `api/sonicberry/find`
-
-Searches for text within an already-opened page. Supports pattern matching and semantic search.
-
-### Request
-
-```json
-{
-  "requests": [
-    {
-      "pageContext": { "pageId": "p1", "id": 0, "turn": 1, "action": "View" },
-      "pattern": "search text or regex",
-      "queryType": "pattern"
-    }
-  ],
-  "toolState": { "sessionId": "...", "pages": {...} }
-}
-```
-
-**Key request fields** (all required except `queryType`):
-
-| Field | Description |
-|-------|-------------|
-| `pageContext` | Page to search within (required) |
-| `pattern` | Text pattern to find (required) |
-| `queryType` | `"pattern"` (default) or `"semantic"` |
-
-### Response
-
-```json
-{
-  "results": [
-    {
-      "pageId": "p1",
-      "content": "Matched content text with surrounding context..."
-    }
-  ],
-  "toolState": { "sessionId": "...", "pages": {...} }
-}
-```
-
----
-
-## LuminaContext (Required Metadata)
-
-Every API call should include a `context` object for tracing and routing:
-
-```json
-{
-  "conversationId": "conversation-uuid",
-  "requestId": "request-uuid",
-  "traceId": "trace-uuid",
-  "partner": "partner-id",
-  "scenarioName": "Copilot",
-  "trafficType": "Production"
-}
-```
-
-Required fields: `conversationId`, `requestId`, `traceId`, `partner`.
 
 ---
 
 ## Complete Workflow Example
 
 ```
-// Resolve config (env vars take precedence over config file)
-endpoint = env.LUMINA_ENDPOINT ?? config.endpoint
-token    = env.LUMINA_BEARER_TOKEN ?? config.bearerToken
-
-// All requests use these headers:
-headers = {
-  "Authorization": "Bearer " + token,
-  "Content-Type": "application/json"
-}
-
 // Step 1: Search for information
-POST {endpoint}/api/sonicberry/search
-Headers: Authorization: Bearer <token>
-{
-  "requests": [{ "q": "Azure Functions deployment best practices", "topN": 5 }],
-  "context": { "conversationId": "c1", "requestId": "r1", "traceId": "t1", "partner": "agent" }
-}
-// Response: 5 results with pageContext, toolState
+lumina_search(q: "Azure Functions deployment best practices", topN: 5)
+// Response: { results: [...], toolState: S1 }
 
 // Step 2: Open the most relevant result for full content
-POST {endpoint}/api/sonicberry/open
-Headers: Authorization: Bearer <token>
-{
-  "requests": [{ "pageContext": <from result[0].pageContext>, "numLines": 300 }],
-  "toolState": <from search response>
-}
-// Response: full page content, updated toolState
+lumina_open(page_context: results[0].pageContext, num_lines: 300, tool_state: S1)
+// Response: { pages: [...], toolState: S2 }
 
 // Step 3: Find specific section in the page
-POST {endpoint}/api/sonicberry/find
-Headers: Authorization: Bearer <token>
-{
-  "requests": [{ "pageContext": <from open response>, "pattern": "deployment slots", "queryType": "semantic" }],
-  "toolState": <from open response>
-}
-// Response: matched content around "deployment slots"
+lumina_find(page_context: pages[0].pageContext, pattern: "deployment slots", query_type: "semantic", tool_state: S2)
+// Response: { results: [...], toolState: S3 }
 ```
 
 ---
