@@ -1,0 +1,671 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Lumina Search Service API Schema",
+  "description": "JSON schema for all Lumina Search Service browser tool APIs: Search, Open, and Find.",
+  "x-api-endpoints": {
+    "description": "All API endpoints are relative to the base endpoint configured via LuminaApiAfdEndpoint (production: https://api.copilotlumina.com, SDF: https://api.sdf.copilotlumina.com). Override via LuminaExperimentServiceEndpoint config. All endpoints use HTTP POST with JSON body.",
+    "browser-tools": {
+      "search": {
+        "path": "api/sonicberry/search",
+        "method": "POST",
+        "description": "Web search via Bing. Batch-capable."
+      },
+      "open": {
+        "path": "api/sonicberry/open",
+        "method": "POST",
+        "description": "Open a page by ref ID or URL. Batch-capable."
+      },
+      "find": {
+        "path": "api/sonicberry/find",
+        "method": "POST",
+        "description": "Find text pattern in an opened page. Requires ToolState."
+      },
+      "toolstate": {
+        "path": "api/sonicberry/toolstate/{sessionId}",
+        "method": "GET",
+        "description": "Retrieve ToolState by session ID."
+      }
+    }
+  },
+  "definitions": {
+    "ToolState": {
+      "type": "object",
+      "description": "Session state for multi-turn browser tool interactions. Propagated across Search → Open → Find operations.",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Unique session identifier for the Lumina tool state."
+        },
+        "pages": {
+          "type": "object",
+          "description": "Map of pageId to page state information.",
+          "additionalProperties": {
+            "$ref": "#/definitions/PageStateInfo"
+          }
+        }
+      }
+    },
+    "PageStateInfo": {
+      "type": "object",
+      "description": "State information for a page in the tool state.",
+      "properties": {
+        "urls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of URLs on the page."
+        },
+        "imageUrls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of image URLs on the page."
+        }
+      }
+    },
+    "LuminaContext": {
+      "type": "object",
+      "description": "Context metadata sent with every Lumina request for tracing, routing, and scenario selection.",
+      "required": ["conversationId", "requestId", "traceId", "partner"],
+      "properties": {
+        "userUtterance": {
+          "type": "string",
+          "description": "The user's original message text."
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Client conversation identifier."
+        },
+        "requestId": {
+          "type": "string",
+          "description": "Client request identifier."
+        },
+        "traceId": {
+          "type": "string",
+          "description": "Telemetry scope trace identifier for distributed tracing."
+        },
+        "clientRequestId": {
+          "type": "string",
+          "description": "Client-provided request identifier."
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "End-to-end correlation identifier."
+        },
+        "isDebugMode": {
+          "type": "boolean",
+          "description": "Whether debug telemetry streaming is enabled."
+        },
+        "scenarioName": {
+          "type": "string",
+          "description": "Lumina scenario name for routing.",
+          "enum": ["Copilot", "Copilot_Researcher", "seval", "Eureka"]
+        },
+        "application": {
+          "type": "string",
+          "description": "Application/scenario group name."
+        },
+        "trafficType": {
+          "type": "string",
+          "description": "Traffic classification for monitoring.",
+          "enum": ["Test", "Production"]
+        },
+        "partner": {
+          "type": "string",
+          "description": "Partner identifier."
+        },
+        "scenarioGroup": {
+          "type": "string",
+          "description": "High-level scenario group.",
+          "enum": ["Researcher", "Mainline", "Eureka"]
+        }
+      }
+    },
+    "Configs": {
+      "type": "object",
+      "description": "Experiment configuration passed to Lumina.",
+      "properties": {
+        "experimentConfig": {
+          "type": "object",
+          "description": "Lumina experiment configuration (opaque to the caller)."
+        }
+      }
+    },
+    "PageContextInfo": {
+      "type": "object",
+      "description": "Reference to a page in the tool state. Used to identify pages across Search/Open/Find operations.",
+      "properties": {
+        "pageId": {
+          "type": "string",
+          "description": "Unique page identifier."
+        },
+        "id": {
+          "type": "integer",
+          "description": "Numeric index within the result set."
+        },
+        "turn": {
+          "type": "integer",
+          "description": "Conversation turn number when this page was created."
+        },
+        "action": {
+          "type": "string",
+          "description": "Action that produced this page context.",
+          "enum": ["Search", "View"]
+        },
+        "loc": {
+          "type": "integer",
+          "description": "Line offset location in the page content."
+        },
+        "lines": {
+          "type": "integer",
+          "description": "Number of lines of content from loc."
+        }
+      }
+    },
+    "SearchRequestAdditionalConfig": {
+      "type": "object",
+      "description": "Additional grounding API configuration for search requests, derived from WebGroundingRequestInvocationConfig.",
+      "properties": {
+        "maxGroundingResults": {
+          "type": "integer",
+          "description": "Maximum number of grounding results to return."
+        },
+        "maxGroundingResultSize": {
+          "type": "integer",
+          "description": "Maximum size (bytes) of each grounding result."
+        },
+        "maxNonWebAnswers": {
+          "type": "integer",
+          "description": "Maximum number of non-web answer types (news, weather, finance)."
+        },
+        "maxSnippetLength": {
+          "type": "integer",
+          "description": "Maximum length of result snippets."
+        },
+        "maxSemanticDocumentLength": {
+          "type": "integer",
+          "description": "Maximum length of semantic document content."
+        },
+        "maxNewsItems": {
+          "type": "integer",
+          "description": "Maximum number of news items."
+        },
+        "maxWeatherItems": {
+          "type": "integer",
+          "description": "Maximum number of weather items."
+        },
+        "maxFinanceItems": {
+          "type": "integer",
+          "description": "Maximum number of finance items."
+        },
+        "retrieval": {
+          "type": "string",
+          "description": "Retrieval strategy parameter."
+        },
+        "p1": {
+          "type": "string",
+          "description": "P1 parameter for search configuration."
+        },
+        "traffic": {
+          "type": "string",
+          "description": "Traffic routing parameter."
+        },
+        "debug": {
+          "type": "string",
+          "description": "Debug parameter for search diagnostics."
+        },
+        "privacy": {
+          "type": "string",
+          "description": "Privacy level parameter."
+        },
+        "setLang": {
+          "type": "string",
+          "description": "Language override parameter."
+        },
+        "bypassPaywall": {
+          "type": "boolean",
+          "description": "Whether to bypass paywall restrictions."
+        },
+        "mobile": {
+          "type": "boolean",
+          "description": "Whether request originates from mobile client."
+        },
+        "customConfig": {
+          "type": "string",
+          "description": "Custom configuration ID for search."
+        },
+        "useCompliantIndex": {
+          "type": "boolean",
+          "description": "Whether to use the compliant search index."
+        },
+        "enablePCM": {
+          "type": "boolean",
+          "description": "Whether to enable Publisher Content Marketplace."
+        },
+        "filter": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Search result filters."
+        },
+        "sf": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Search features to enable."
+        },
+        "customParams": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Custom key-value parameters for search."
+        },
+        "customGroundingHost": {
+          "type": "string",
+          "description": "Custom grounding host override."
+        }
+      }
+    },
+    "RichCardsRequest": {
+      "type": "object",
+      "description": "Rich cards configuration for search results.",
+      "properties": {
+        "multiCardView": {
+          "type": "string",
+          "description": "Multi-card view type.",
+          "enum": ["magazine"]
+        },
+        "renderForIsoComp": {
+          "type": ["boolean", "null"],
+          "description": "Whether to render for ISO compatibility."
+        }
+      }
+    },
+    "ErrorDetail": {
+      "type": "object",
+      "description": "Error detail from Lumina response pages.",
+      "properties": {
+        "statusCode": {
+          "type": "integer",
+          "description": "HTTP status code of the error."
+        }
+      }
+    },
+    "LinkInfo": {
+      "type": "object",
+      "description": "Link information extracted from a page."
+    },
+    "DocumentInfo": {
+      "type": "object",
+      "description": "Document information within a page response.",
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LinkInfo" },
+          "description": "Hyperlinks found in the page."
+        },
+        "imageLinks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LinkInfo" },
+          "description": "Image links found in the page."
+        }
+      }
+    },
+
+    "SearchRequestItem": {
+      "type": "object",
+      "description": "A single search query item sent to Lumina.",
+      "required": ["q"],
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "Search query text."
+        },
+        "topN": {
+          "type": "integer",
+          "description": "Maximum number of results to return."
+        },
+        "recency": {
+          "type": "integer",
+          "description": "Number of days for recency filtering. 0 = no filter."
+        },
+        "source": {
+          "type": "string",
+          "description": "Data source for search.",
+          "default": "web_with_bing"
+        },
+        "domains": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Restrict search to these domains (e.g., 'microsoft.com')."
+        },
+        "language": {
+          "type": "string",
+          "description": "Two-letter ISO language code (e.g., 'en')."
+        },
+        "countryCode": {
+          "type": "string",
+          "description": "Two-letter ISO country code (e.g., 'us')."
+        },
+        "userIpAddress": {
+          "type": "string",
+          "description": "Client IP address for geolocation."
+        },
+        "market": {
+          "type": "string",
+          "description": "Market locale string (e.g., 'en-US')."
+        },
+        "additionalConfig": {
+          "$ref": "#/definitions/SearchRequestAdditionalConfig"
+        },
+        "cards": {
+          "$ref": "#/definitions/RichCardsRequest",
+          "description": "Rich cards configuration (optional)."
+        }
+      }
+    },
+    "OpenRequestItem": {
+      "type": "object",
+      "description": "A single page open request item.",
+      "oneOf": [
+        { "required": ["pageContext"] },
+        { "required": ["refId"] }
+      ],
+      "properties": {
+        "pageContext": {
+          "$ref": "#/definitions/PageContextInfo",
+          "description": "Page context from a previous search result."
+        },
+        "refId": {
+          "type": "string",
+          "description": "Direct URL to open (alternative to pageContext)."
+        },
+        "source": {
+          "type": "string",
+          "description": "Data source.",
+          "default": "web_with_bing"
+        },
+        "enimgoutlinks": {
+          "type": "boolean",
+          "description": "Whether to include image out-links in the response."
+        },
+        "lineNo": {
+          "type": "integer",
+          "description": "Start line number for page content.",
+          "default": 0
+        },
+        "numLines": {
+          "type": "integer",
+          "description": "Number of lines of page content to return."
+        }
+      }
+    },
+    "FindRequestItem": {
+      "type": "object",
+      "description": "A single find/search-within-page request item.",
+      "required": ["pageContext", "pattern"],
+      "properties": {
+        "pageContext": {
+          "$ref": "#/definitions/PageContextInfo",
+          "description": "Page context to search within."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Text pattern to search for in the page."
+        },
+        "queryType": {
+          "type": "string",
+          "description": "Type of search to perform.",
+          "enum": ["semantic", "pattern"],
+          "default": "pattern"
+        }
+      }
+    },
+
+    "SearchResultItem": {
+      "type": "object",
+      "description": "A single search result from Lumina.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL of the search result page."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the search result page."
+        },
+        "content": {
+          "type": "string",
+          "description": "Semantic document content (grounding text)."
+        },
+        "pageContext": {
+          "$ref": "#/definitions/PageContextInfo",
+          "description": "Page context for referencing this result in subsequent Open/Find operations."
+        },
+        "answerType": {
+          "type": "string",
+          "description": "Type of answer (e.g., 'WebPages', 'News', 'Videos')."
+        },
+        "datePublished": {
+          "type": "string",
+          "description": "Publication date of the content."
+        },
+        "siteSource": {
+          "type": "string",
+          "description": "Source site identifier."
+        },
+        "query": {
+          "type": "string",
+          "description": "The search query that produced this result."
+        },
+        "licensedContent": {
+          "type": ["boolean", "null"],
+          "description": "Whether the content is licensed."
+        },
+        "remainingLines": {
+          "type": ["integer", "null"],
+          "description": "Number of remaining content lines available for context."
+        }
+      }
+    },
+    "PageItem": {
+      "type": "object",
+      "description": "A page item from Open responses.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL of the page."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the page."
+        },
+        "content": {
+          "type": "string",
+          "description": "Page content text."
+        },
+        "pageContext": {
+          "$ref": "#/definitions/PageContextInfo",
+          "description": "Page context for referencing this page."
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Whether the page was successfully retrieved."
+        },
+        "error": {
+          "type": "string",
+          "description": "Error code if retrieval failed."
+        },
+        "errorMessage": {
+          "type": "string",
+          "description": "Error message if retrieval failed."
+        },
+        "errorDetail": {
+          "$ref": "#/definitions/ErrorDetail",
+          "description": "Detailed error information."
+        },
+        "dependencyTraceId": {
+          "type": "string",
+          "description": "Trace ID for the dependency call."
+        },
+        "doc": {
+          "$ref": "#/definitions/DocumentInfo",
+          "description": "Document info with extracted links."
+        },
+        "totalLines": {
+          "type": ["integer", "null"],
+          "description": "Total number of lines in the full page."
+        },
+        "pageId": {
+          "type": "string",
+          "description": "Unique page identifier."
+        }
+      }
+    },
+    "FindResultItem": {
+      "type": "object",
+      "description": "A find result from the Find API.",
+      "properties": {
+        "pageId": {
+          "type": "string",
+          "description": "Page ID where the pattern was found."
+        },
+        "content": {
+          "type": "string",
+          "description": "Matched content text."
+        }
+      }
+    }
+  },
+
+  "properties": {
+    "SearchRequest": {
+      "type": "object",
+      "description": "Request payload for the Lumina Search API (browser.search / search_query tool).",
+      "x-api-path": "api/sonicberry/search",
+      "x-http-method": "POST",
+      "x-base-endpoint": "LuminaApiAfdEndpoint (e.g., https://api.copilotlumina.com)",
+      "required": ["requests"],
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SearchRequestItem" },
+          "description": "Array of search query items (supports batch search)."
+        },
+        "toolState": {
+          "$ref": "#/definitions/ToolState",
+          "description": "Session state from previous operations (null on first search)."
+        },
+        "configs": {
+          "$ref": "#/definitions/Configs",
+          "description": "Experiment configuration."
+        },
+        "context": {
+          "$ref": "#/definitions/LuminaContext",
+          "description": "Request context metadata for tracing and routing."
+        }
+      }
+    },
+    "SearchResponse": {
+      "type": "object",
+      "description": "Response payload from the Lumina Search API.",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SearchResultItem" },
+          "description": "Array of search results."
+        },
+        "toolState": {
+          "$ref": "#/definitions/ToolState",
+          "description": "Updated session state to pass to subsequent operations."
+        },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Error messages if any queries failed."
+        }
+      }
+    },
+
+    "OpenRequest": {
+      "type": "object",
+      "description": "Request payload for the Lumina Open API (browser.open tool). Opens pages from search results or direct URLs.",
+      "x-api-path": "api/sonicberry/open",
+      "x-http-method": "POST",
+      "x-base-endpoint": "LuminaApiAfdEndpoint (e.g., https://api.copilotlumina.com)",
+      "required": ["requests"],
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/OpenRequestItem" },
+          "description": "Array of page open request items (supports batch open)."
+        },
+        "toolState": {
+          "$ref": "#/definitions/ToolState",
+          "description": "Session state from previous search operation (required)."
+        },
+        "configs": {
+          "$ref": "#/definitions/Configs",
+          "description": "Experiment configuration."
+        },
+        "context": {
+          "$ref": "#/definitions/LuminaContext",
+          "description": "Request context metadata."
+        }
+      }
+    },
+    "OpenResponse": {
+      "type": "object",
+      "description": "Response payload from the Lumina Open API (PageResponse type).",
+      "properties": {
+        "pages": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/PageItem" },
+          "description": "Array of opened page items with content."
+        },
+        "toolState": {
+          "$ref": "#/definitions/ToolState",
+          "description": "Updated session state."
+        }
+      }
+    },
+
+    "FindRequest": {
+      "type": "object",
+      "description": "Request payload for the Lumina Find API (browser.find tool). Searches for text within opened pages.",
+      "x-api-path": "api/sonicberry/find",
+      "x-http-method": "POST",
+      "x-base-endpoint": "LuminaApiAfdEndpoint (e.g., https://api.copilotlumina.com)",
+      "required": ["requests", "toolState"],
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/FindRequestItem" },
+          "description": "Array of find request items (supports batch find)."
+        },
+        "toolState": {
+          "$ref": "#/definitions/ToolState",
+          "description": "Session state (required — page must have been opened first)."
+        },
+        "configs": {
+          "$ref": "#/definitions/Configs",
+          "description": "Experiment configuration."
+        },
+        "context": {
+          "$ref": "#/definitions/LuminaContext",
+          "description": "Request context metadata."
+        }
+      }
+    },
+    "FindResponse": {
+      "type": "object",
+      "description": "Response payload from the Lumina Find API.",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/FindResultItem" },
+          "description": "Array of find results with matched content."
+        },
+        "toolState": {
+          "$ref": "#/definitions/ToolState",
+          "description": "Updated session state."
+        }
+      }
+    }
+  }
+}
