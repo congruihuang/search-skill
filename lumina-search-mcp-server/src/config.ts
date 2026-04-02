@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 
 export interface LuminaConfig {
   endpoint: string;
@@ -33,16 +32,9 @@ export function loadConfig(): LuminaConfig {
     path.resolve(process.cwd(), "lumina-config.json")
   );
 
-  // 3. User-level config
-  const userConfig = tryReadJsonFile(
-    path.join(os.homedir(), ".lumina", "config.json")
-  );
-
   // Merge with precedence
-  const endpoint =
-    envEndpoint || localConfig?.endpoint || userConfig?.endpoint;
-  const bearerToken =
-    envToken || localConfig?.bearerToken || userConfig?.bearerToken;
+  const endpoint = envEndpoint || localConfig?.endpoint;
+  const bearerToken = envToken || localConfig?.bearerToken;
 
   if (!endpoint) {
     throw new Error(

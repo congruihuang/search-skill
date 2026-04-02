@@ -6,9 +6,11 @@ export const PageContextInfoSchema = z.object({
   pageId: z.string().optional().describe("Unique page identifier"),
   id: z.number().int().optional().describe("Numeric index within the result set"),
   turn: z.number().int().optional().describe("Conversation turn number when created"),
-  action: z.enum(["Search", "View"]).optional().describe("Action that produced this page context"),
+  action: z.enum(["search", "view"]).optional().describe("Action that produced this page context"),
+  rid: z.string().optional().describe("Request identifier for the operation"),
   loc: z.number().int().optional().describe("Line offset location in content"),
-  lines: z.number().int().optional().describe("Number of lines from loc"),
+  lineNum: z.number().int().optional().describe("Number of lines of content from loc"),
+  lines: z.number().int().optional().describe("Number of lines from loc (alias for lineNum)"),
 });
 
 export const ToolStateSchema = z
@@ -23,6 +25,9 @@ export const ToolStateSchema = z
         })
       )
       .optional(),
+    pageStack: z.array(z.unknown()).optional(),
+    pageContext: z.record(z.string(), z.unknown()).optional(),
+    urlLookup: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough(); // ToolState is opaque — preserve unknown fields
 
@@ -64,8 +69,13 @@ export const LuminaSearchInputSchema = {
 
 export const LuminaOpenInputSchema = {
   page_context: PageContextInfoSchema.optional().describe(
-    "PageContextInfo from a prior search or open result"
+    "PageContextInfo from a prior search or open result. When action is 'view', use with 'id' to open an external link from the page."
   ),
+  id: z
+    .number()
+    .int()
+    .optional()
+    .describe("External link position index in the link list. Used when page_context action is 'view' to specify which link to open."),
   url: z
     .string()
     .optional()
@@ -81,8 +91,8 @@ export const LuminaOpenInputSchema = {
     .int()
     .optional()
     .describe("Number of lines of page content to return"),
-  tool_state: ToolStateSchema.describe(
-    "ToolState from a prior call (required)"
+  tool_state: ToolStateSchema.optional().describe(
+    "ToolState from a prior call. Pass through unchanged."
   ),
 };
 
@@ -90,6 +100,11 @@ export const LuminaFindInputSchema = {
   page_context: PageContextInfoSchema.describe(
     "PageContextInfo identifying the page to search within"
   ),
+  id: z
+    .number()
+    .int()
+    .optional()
+    .describe("External link position index in the link list. Used when page_context action is 'view' to specify which link to target."),
   pattern: z.string().describe("Text pattern to find in the page"),
   query_type: z
     .enum(["pattern", "semantic"])

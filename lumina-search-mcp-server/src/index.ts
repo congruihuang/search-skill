@@ -12,7 +12,7 @@ async function main() {
   // 1. Load configuration (fails fast with descriptive error if missing)
   const config = loadConfig();
   console.error(
-    `[lumina-search-mcp] Loaded config: endpoint=${config.endpoint}`
+    `[lumina-web-mcp] Loaded config: endpoint=${config.endpoint}`
   );
 
   // 2. Create shared API client
@@ -20,7 +20,7 @@ async function main() {
 
   // 3. Create MCP server
   const server = new McpServer({
-    name: "lumina-search",
+    name: "lumina-web",
     version: "1.0.0",
   });
 
@@ -32,10 +32,10 @@ async function main() {
   // 5. Start stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("[lumina-search-mcp] Server running on stdio");
+  console.error("[lumina-web-mcp] Server running on stdio");
 }
 
 main().catch((error) => {
-  console.error("[lumina-search-mcp] Fatal error:", error);
+  console.error("[lumina-web-mcp] Fatal error:", error);
   process.exit(1);
 });

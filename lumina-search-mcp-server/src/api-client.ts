@@ -53,10 +53,11 @@ export class LuminaApiClient {
 
   async open(params: {
     pageContext?: unknown;
+    id?: number;
     url?: string;
     lineNo?: number;
     numLines?: number;
-    toolState: unknown;
+    toolState?: unknown;
   }): Promise<ApiResult> {
     const requestItem: Record<string, unknown> = {};
     if (params.pageContext) {
@@ -64,12 +65,13 @@ export class LuminaApiClient {
     } else if (params.url) {
       requestItem.refId = params.url;
     }
+    if (params.id !== undefined) requestItem.id = params.id;
     if (params.lineNo !== undefined) requestItem.lineNo = params.lineNo;
     if (params.numLines !== undefined) requestItem.numLines = params.numLines;
 
     const body = {
       requests: [requestItem],
-      toolState: params.toolState,
+      toolState: params.toolState ?? null,
       context: createLuminaContext(),
     };
     return this.post("api/sonicberry/open", body);
@@ -77,18 +79,20 @@ export class LuminaApiClient {
 
   async find(params: {
     pageContext: unknown;
+    id?: number;
     pattern: string;
     queryType?: string;
     toolState: unknown;
   }): Promise<ApiResult> {
+    const requestItem: Record<string, unknown> = {
+      pageContext: params.pageContext,
+      pattern: params.pattern,
+      queryType: params.queryType ?? "pattern",
+    };
+    if (params.id !== undefined) requestItem.id = params.id;
+
     const body = {
-      requests: [
-        {
-          pageContext: params.pageContext,
-          pattern: params.pattern,
-          queryType: params.queryType ?? "pattern",
-        },
-      ],
+      requests: [requestItem],
       toolState: params.toolState,
       context: createLuminaContext(),
     };
@@ -106,7 +110,7 @@ export class LuminaApiClient {
       const message = status
         ? `Lumina API error (HTTP ${status}): ${JSON.stringify(detail)}`
         : `Lumina API request failed: ${error.message}`;
-      console.error(`[lumina-search-mcp] ${message}`);
+      console.error(`[lumina-web-mcp] ${message}`);
       return { success: false, error: message };
     }
   }

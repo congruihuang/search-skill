@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lumina-web": {
+      "command": "node",
+      "args": ["./lumina-search-mcp-server/build/index.js"],
+      "env": {
+        "LUMINA_ENDPOINT": "https://luminaserviceapi-sdf-westus.copilotlumina.com",
+        "LUMINA_BEARER_TOKEN": "<your-token>"
+      }
+    }
+  }
+}

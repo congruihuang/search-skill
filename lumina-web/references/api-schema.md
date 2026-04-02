@@ -41,7 +41,6 @@ The Lumina API base URL is environment-dependent. Resolve using this precedence:
 
 1. **Environment variable** `LUMINA_ENDPOINT` (highest priority)
 2. **Project config** `./lumina-config.json` → `endpoint` field
-3. **User config** `~/.lumina/config.json` → `endpoint` field
 
 | Environment | Endpoint |
 |-------------|----------|
@@ -66,7 +65,6 @@ All APIs require a Bearer token. Resolve using this precedence:
 
 1. **Environment variable** `LUMINA_BEARER_TOKEN` (highest priority)
 2. **Project config** `./lumina-config.json` → `bearerToken` field
-3. **User config** `~/.lumina/config.json` → `bearerToken` field
 
 **Required HTTP headers on every request:**
 

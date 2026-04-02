@@ -25,6 +25,7 @@ export function registerFindTool(
     async (args) => {
       const result = await client.find({
         pageContext: args.page_context,
+        id: args.id,
         pattern: args.pattern,
         queryType: args.query_type,
         toolState: args.tool_state,

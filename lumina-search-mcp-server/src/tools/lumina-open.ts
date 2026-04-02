@@ -40,6 +40,7 @@ export function registerOpenTool(
 
       const result = await client.open({
         pageContext: args.page_context,
+        id: args.id,
         url: args.url,
         lineNo: args.line_no,
         numLines: args.num_lines,
