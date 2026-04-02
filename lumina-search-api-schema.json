@@ -42,6 +42,21 @@
           "additionalProperties": {
             "$ref": "#/definitions/PageStateInfo"
           }
+        },
+        "pageStack": {
+          "type": "array",
+          "description": "Stack of page references for navigation history.",
+          "items": {}
+        },
+        "pageContext": {
+          "type": "object",
+          "description": "Map of page context state.",
+          "additionalProperties": {}
+        },
+        "urlLookup": {
+          "type": "object",
+          "description": "Map of URL to page state for reverse lookups.",
+          "additionalProperties": {}
         }
       }
     },
@@ -148,15 +163,23 @@
         "action": {
           "type": "string",
           "description": "Action that produced this page context.",
-          "enum": ["Search", "View"]
+          "enum": ["search", "view"]
+        },
+        "rid": {
+          "type": "string",
+          "description": "Request identifier for the operation that produced this page context."
         },
         "loc": {
           "type": "integer",
           "description": "Line offset location in the page content."
         },
-        "lines": {
+        "lineNum": {
           "type": "integer",
           "description": "Number of lines of content from loc."
+        },
+        "lines": {
+          "type": "integer",
+          "description": "Number of lines of content from loc (alias for lineNum)."
         }
       }
     },
@@ -288,7 +311,21 @@
     },
     "LinkInfo": {
       "type": "object",
-      "description": "Link information extracted from a page."
+      "description": "Link information extracted from a page.",
+      "properties": {
+        "linkId": {
+          "type": "integer",
+          "description": "Numeric index of the link within the page."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL of the link."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name or anchor text of the link."
+        }
+      }
     },
     "DocumentInfo": {
       "type": "object",
@@ -303,6 +340,78 @@
           "type": "array",
           "items": { "$ref": "#/definitions/LinkInfo" },
           "description": "Image links found in the page."
+        }
+      }
+    },
+    "StructuredDocument": {
+      "type": "object",
+      "description": "Structured document content with template and extracted links, returned in Open responses.",
+      "properties": {
+        "template": {
+          "type": "string",
+          "description": "Page content as a template string with link placeholders (e.g., [[[link_0]]])."
+        },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LinkInfo" },
+          "description": "Hyperlinks extracted from the page, referenced by linkId in the template."
+        },
+        "imageLinks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LinkInfo" },
+          "description": "Image links extracted from the page."
+        }
+      }
+    },
+    "CursorContext": {
+      "type": "object",
+      "description": "Cursor context for pagination across result sets.",
+      "properties": {
+        "refCursor": {
+          "type": "integer",
+          "description": "Reference cursor position for the current result set."
+        }
+      }
+    },
+    "CardResult": {
+      "type": "object",
+      "description": "Rich card result metadata associated with a search query.",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query associated with this card result."
+        }
+      }
+    },
+    "SearchResponseMetadata": {
+      "type": "object",
+      "description": "Metadata about a search query execution within the response.",
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "The search query that was executed."
+        },
+        "eventId": {
+          "type": "string",
+          "description": "Unique event identifier for this search execution."
+        },
+        "executionTimeInMs": {
+          "type": "integer",
+          "description": "Time taken to execute the search query in milliseconds."
+        }
+      }
+    },
+    "IndexedResult": {
+      "type": "object",
+      "description": "Indexed result entry from Find operations, indicating indexing status per page.",
+      "properties": {
+        "pageId": {
+          "type": "string",
+          "description": "Page ID that was indexed."
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if indexing failed, empty string on success."
         }
       }
     },
@@ -369,7 +478,11 @@
       "properties": {
         "pageContext": {
           "$ref": "#/definitions/PageContextInfo",
-          "description": "Page context from a previous search result."
+          "description": "Page context from a previous search result. When action is 'view', use with 'id' to open an external link from the page."
+        },
+        "id": {
+          "type": "integer",
+          "description": "External link position index in the link list. Used when pageContext action is 'view' to specify which link to open."
         },
         "refId": {
           "type": "string",
@@ -404,6 +517,10 @@
           "$ref": "#/definitions/PageContextInfo",
           "description": "Page context to search within."
         },
+        "id": {
+          "type": "integer",
+          "description": "External link position index in the link list. Used when action is 'view' to specify which link to target."
+        },
         "pattern": {
           "type": "string",
           "description": "Text pattern to search for in the page."
@@ -431,7 +548,11 @@
         },
         "content": {
           "type": "string",
-          "description": "Semantic document content (grounding text)."
+          "description": "Semantic document content (grounding text). Alias for semanticDocument used in MCP layer."
+        },
+        "semanticDocument": {
+          "type": "string",
+          "description": "Full semantic document content (grounding text) from search result."
         },
         "pageContext": {
           "$ref": "#/definitions/PageContextInfo",
@@ -445,13 +566,34 @@
           "type": "string",
           "description": "Publication date of the content."
         },
+        "dateLastCrawled": {
+          "type": "string",
+          "description": "Date when the content was last crawled by the search engine."
+        },
+        "language": {
+          "type": "string",
+          "description": "Two-letter ISO language code of the content (e.g., 'en')."
+        },
         "siteSource": {
           "type": "string",
           "description": "Source site identifier."
         },
-        "query": {
+        "q": {
           "type": "string",
           "description": "The search query that produced this result."
+        },
+        "query": {
+          "type": "string",
+          "description": "The search query that produced this result (alias for q)."
+        },
+        "source": {
+          "type": "string",
+          "description": "Data source used for this result (e.g., 'web_with_bing')."
+        },
+        "snippets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Short text snippets from the search result."
         },
         "licensedContent": {
           "type": ["boolean", "null"],
@@ -479,9 +621,17 @@
           "type": "string",
           "description": "Page content text."
         },
+        "structuredDocument": {
+          "$ref": "#/definitions/StructuredDocument",
+          "description": "Structured document with template content and extracted links."
+        },
         "pageContext": {
           "$ref": "#/definitions/PageContextInfo",
           "description": "Page context for referencing this page."
+        },
+        "cursorContext": {
+          "$ref": "#/definitions/CursorContext",
+          "description": "Cursor context for pagination within this page."
         },
         "success": {
           "type": "boolean",
@@ -528,6 +678,32 @@
         "content": {
           "type": "string",
           "description": "Matched content text."
+        },
+        "template": {
+          "type": "string",
+          "description": "Matched content as a template string with link placeholders (e.g., [[[link_0]]])."
+        },
+        "lineIdx": {
+          "type": "integer",
+          "description": "Line index where the match was found in the page."
+        },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LinkInfo" },
+          "description": "Hyperlinks extracted from the matched content."
+        },
+        "imageLinks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LinkInfo" },
+          "description": "Image links extracted from the matched content."
+        },
+        "pageContext": {
+          "$ref": "#/definitions/PageContextInfo",
+          "description": "Page context for the matched result."
+        },
+        "cursorContext": {
+          "$ref": "#/definitions/CursorContext",
+          "description": "Cursor context for pagination within results."
         }
       }
     }
@@ -573,6 +749,28 @@
         "toolState": {
           "$ref": "#/definitions/ToolState",
           "description": "Updated session state to pass to subsequent operations."
+        },
+        "pageId": {
+          "type": "string",
+          "description": "Page identifier for the search results page."
+        },
+        "pageContext": {
+          "$ref": "#/definitions/PageContextInfo",
+          "description": "Page context for the search results page, usable in subsequent operations."
+        },
+        "cursorContext": {
+          "$ref": "#/definitions/CursorContext",
+          "description": "Cursor context for pagination of search results."
+        },
+        "cardResults": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CardResult" },
+          "description": "Rich card results associated with the search queries."
+        },
+        "searchResponseMetadataList": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SearchResponseMetadata" },
+          "description": "Metadata about each search query execution (timing, event IDs)."
         },
         "errors": {
           "type": "array",
@@ -664,6 +862,11 @@
         "toolState": {
           "$ref": "#/definitions/ToolState",
           "description": "Updated session state."
+        },
+        "indexedResults": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/IndexedResult" },
+          "description": "Indexing status for each page that was searched."
         }
       }
     }
